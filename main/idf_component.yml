@@ -16,9 +16,21 @@ dependencies:
     path: ../components/esp-webrtc-solution/components/esp_webrtc/impl/peer_default
   render_impl:
     path: ../components/esp-webrtc-solution/components/av_render/render_impl
-  media_lib_sal:
-    path: ../components/esp-webrtc-solution/components/media_lib_sal
+  # media_lib_sal:
+  #   path: ../components/esp-webrtc-solution/components/media_lib_sal
+  # esp_webrtc:
+  #   path: ../components/esp-webrtc-solution/components/esp_webrtc
+  # webrtc_utils:
+  #   path: ../components/esp-webrtc-solution/components/webrtc_utils
+  # common:
+  #   path: ../components/esp-webrtc-solution/solutions/common
+  # codec_board:
+  #   path: ../components/esp-webrtc-solution/components/codec_board
   espressif/esp_h264:
     version: "1.0.4"
     rules:
     - if: target in [esp32p4, esp32s3]
+  espressif/esp_hosted:
+    version: "2.0.10"
+  espressif/esp_libsrtp:
+    version: "*"
