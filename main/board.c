@@ -8,17 +8,17 @@
 */
 
 #include <stdio.h>
-#include "esp_log.h"
-#include "codec_init.h"
+
 #include "codec_board.h"
+#include "codec_init.h"
 #include "esp_codec_dev.h"
+#include "esp_log.h"
 #include "sdkconfig.h"
 #include "settings.h"
 
 static const char *TAG = "Board";
 
-void init_board()
-{
+void init_board() {
     ESP_LOGI(TAG, "Init board.");
     set_codec_board_type(TEST_BOARD_NAME);
     // Notes when use playback and record at same time, must set reuse_dev = false

@@ -7,28 +7,29 @@
    CONDITIONS OF ANY KIND, either express or implied.
 */
 
-#include "esp_webrtc.h"
-#include "media_lib_os.h"
-#include "driver/gpio.h"
 #include "common.h"
+#include "driver/gpio.h"
 #include "esp_log.h"
-#include "esp_webrtc_defaults.h"
 #include "esp_peer_default.h"
+#include "esp_webrtc.h"
+#include "esp_webrtc_defaults.h"
+#include "media_lib_os.h"
 #include "webrtc_http_server.h"
 
 #define TAG "DOOR_BELL"
 
 // Customized commands
-#define DOOR_BELL_OPEN_DOOR_CMD     "OPEN_DOOR"
-#define DOOR_BELL_DOOR_OPENED_CMD   "DOOR_OPENED"
-#define DOOR_BELL_RING_CMD          "RING"
+#define DOOR_BELL_OPEN_DOOR_CMD "OPEN_DOOR"
+#define DOOR_BELL_DOOR_OPENED_CMD "DOOR_OPENED"
+#define DOOR_BELL_RING_CMD "RING"
 #define DOOR_BELL_CALL_ACCEPTED_CMD "ACCEPT_CALL"
-#define DOOR_BELL_CALL_DENIED_CMD   "DENY_CALL"
+#define DOOR_BELL_CALL_DENIED_CMD "DENY_CALL"
 
 #define SAME_STR(a, b) (strncmp(a, b, sizeof(b) - 1) == 0)
-#define SEND_CMD(webrtc, cmd) \
-    esp_webrtc_send_custom_data(webrtc, ESP_WEBRTC_CUSTOM_DATA_VIA_SIGNALING, (uint8_t *)cmd, strlen(cmd))
-#define ELEMS(arr) sizeof(arr)/sizeof(arr[0])
+#define SEND_CMD(webrtc, cmd)                                                                      \
+    esp_webrtc_send_custom_data(webrtc, ESP_WEBRTC_CUSTOM_DATA_VIA_SIGNALING, (uint8_t *)cmd,      \
+                                strlen(cmd))
+#define ELEMS(arr) sizeof(arr) / sizeof(arr[0])
 
 typedef enum {
     DOOR_BELL_STATE_NONE,
@@ -45,21 +46,19 @@ typedef struct {
 } user_data_ch_t;
 
 static esp_webrtc_handle_t webrtc;
-static door_bell_state_t   door_bell_state;
-static bool                monitor_key;
-static user_data_ch_t      user_ch[2];
+static door_bell_state_t door_bell_state;
+static bool monitor_key;
+static user_data_ch_t user_ch[2];
 static bool data_running = false;
 
-static void door_bell_change_state(door_bell_state_t state)
-{
+static void door_bell_change_state(door_bell_state_t state) {
     door_bell_state = state;
     if (state == DOOR_BELL_STATE_CONNECTING || state == DOOR_BELL_STATE_NONE) {
         stop_music();
     }
 }
 
-static int door_bell_on_cmd(esp_webrtc_custom_data_via_t via, uint8_t *data, int size, void *ctx)
-{
+static int door_bell_on_cmd(esp_webrtc_custom_data_via_t via, uint8_t *data, int size, void *ctx) {
     // Only handle signaling message
     if (via != ESP_WEBRTC_CUSTOM_DATA_VIA_SIGNALING) {
         return 0;
@@ -79,8 +78,7 @@ static int door_bell_on_cmd(esp_webrtc_custom_data_via_t via, uint8_t *data, int
     return 0;
 }
 
-int close_data_channel(int id)
-{
+int close_data_channel(int id) {
     if (id < ELEMS(user_ch) && user_ch[id].used) {
         ESP_LOGI(TAG, "Start to Close data channel %s", user_ch[id].info.label);
         esp_peer_handle_t peer_handle = NULL;
@@ -90,8 +88,7 @@ int close_data_channel(int id)
     return 0;
 }
 
-static void add_channel(esp_peer_data_channel_info_t *ch)
-{
+static void add_channel(esp_peer_data_channel_info_t *ch) {
     for (int i = 0; i < ELEMS(user_ch); i++) {
         if (user_ch[i].used == false) {
             user_ch[i].used = true;
@@ -106,8 +103,7 @@ static void add_channel(esp_peer_data_channel_info_t *ch)
     }
 }
 
-user_data_ch_t *get_channel(uint16_t stream_id)
-{
+user_data_ch_t *get_channel(uint16_t stream_id) {
     for (int i = 0; i < ELEMS(user_ch); i++) {
         if (user_ch[i].used && user_ch[i].info.stream_id == stream_id) {
             return &user_ch[i];
@@ -116,13 +112,12 @@ user_data_ch_t *get_channel(uint16_t stream_id)
     return NULL;
 }
 
-static void remove_channel(esp_peer_data_channel_info_t *ch)
-{
+static void remove_channel(esp_peer_data_channel_info_t *ch) {
     for (int i = 0; i < ELEMS(user_ch); i++) {
         if (user_ch[i].used && user_ch[i].info.stream_id == ch->stream_id) {
             user_ch[i].used = false;
             ESP_LOGI(TAG, "Removed %s id %d finished", user_ch[i].info.label, ch->stream_id);
-            free((char*)user_ch[i].info.label);
+            free((char *)user_ch[i].info.label);
             user_ch[i].info.label = NULL;
             break;
         }
@@ -131,8 +126,7 @@ static void remove_channel(esp_peer_data_channel_info_t *ch)
 
 #define CNT_TO_CHAR(c) (((c) & 0xFF) % 94 + 33)
 
-static void data_thread_hdlr(void *arg)
-{
+static void data_thread_hdlr(void *arg) {
     data_running = true;
 #define SEND_PERIOD 1000
     int time = 0;
@@ -151,14 +145,14 @@ static void data_thread_hdlr(void *arg)
                 if (user_ch[i].used == false) {
                     continue;
                 }
-                int n = snprintf(str, str_len -1 , "Send to %s count %d\n",
-                    user_ch[i].info.label, user_ch[i].send_count);
+                int n = snprintf(str, str_len - 1, "Send to %s count %d\n", user_ch[i].info.label,
+                                 user_ch[i].send_count);
                 memset(str + n, CNT_TO_CHAR(user_ch[i].send_count), str_len - n);
                 user_ch[i].send_count++;
                 esp_peer_data_frame_t data_frame = {
                     .type = ESP_PEER_DATA_CHANNEL_STRING,
                     .stream_id = user_ch[i].info.stream_id,
-                    .data = (uint8_t*)str,
+                    .data = (uint8_t *)str,
                     .size = str_len,
                 };
                 esp_peer_handle_t peer_handle = NULL;
@@ -168,27 +162,26 @@ static void data_thread_hdlr(void *arg)
             last_send_time = time;
         }
         media_lib_thread_sleep(50);
-        time += 50;;
+        time += 50;
+        ;
     }
     data_running = false;
     media_lib_thread_destroy(NULL);
 }
 
-static int webrtc_data_channel_opened(esp_peer_data_channel_info_t *ch, void *ctx)
-{
+static int webrtc_data_channel_opened(esp_peer_data_channel_info_t *ch, void *ctx) {
     ESP_LOGI(TAG, "Channel %s opened stream id %d", ch->label ? ch->label : "NULL", ch->stream_id);
     add_channel(ch);
     return 0;
 }
 
-static bool verify_data(uint8_t *data, int size)
-{
-    char *line_end = strchr((char*)data, '\n');
-    char * count = strstr((char*)data, "the ");
+static bool verify_data(uint8_t *data, int size) {
+    char *line_end = strchr((char *)data, '\n');
+    char *count = strstr((char *)data, "the ");
     if (line_end == NULL || count == NULL) {
         return false;
     }
-    int n = (line_end - (char*)data) + 1;
+    int n = (line_end - (char *)data) + 1;
     int left_size = size - n;
     int send_count = atoi(count + strlen("the "));
     uint8_t expect = CNT_TO_CHAR(send_count);
@@ -200,51 +193,44 @@ static bool verify_data(uint8_t *data, int size)
     return true;
 }
 
-static int webrtc_on_data(esp_peer_data_frame_t *frame, void *ctx)
-{
+static int webrtc_on_data(esp_peer_data_frame_t *frame, void *ctx) {
     user_data_ch_t *ch = get_channel(frame->stream_id);
-    char *line_end = strchr((char*)frame->data, '\n');
+    char *line_end = strchr((char *)frame->data, '\n');
     if (line_end == NULL) {
         return -1;
     }
-    int str_len = (line_end - (char*)frame->data);
+    int str_len = (line_end - (char *)frame->data);
     bool verified = verify_data(frame->data, frame->size);
     if (verified == false) {
         ESP_LOGE(TAG, "Get data label %s verify:%d data: %.*s",
-            ch && ch->info.label ? ch->info.label : "NULL",
-            verified,
-            str_len, (char *)frame->data);
+                 ch && ch->info.label ? ch->info.label : "NULL", verified, str_len,
+                 (char *)frame->data);
     } else {
         ESP_LOGI(TAG, "Get data label %s verify:%d data: %.*s",
-            ch && ch->info.label ? ch->info.label : "NULL",
-            verified,
-            str_len, (char *)frame->data);
-    } 
+                 ch && ch->info.label ? ch->info.label : "NULL", verified, str_len,
+                 (char *)frame->data);
+    }
     return 0;
 }
 
-static int webrtc_data_channel_closed(esp_peer_data_channel_info_t *ch, void *ctx)
-{
+static int webrtc_data_channel_closed(esp_peer_data_channel_info_t *ch, void *ctx) {
     remove_channel(ch);
     return 0;
 }
 
-static int webrtc_event_handler(esp_webrtc_event_t *event, void *ctx)
-{
+static int webrtc_event_handler(esp_webrtc_event_t *event, void *ctx) {
     if (event->type == ESP_WEBRTC_EVENT_CONNECTED) {
         door_bell_change_state(DOOR_BELL_STATE_CONNECTED);
-    } else if (event->type == ESP_WEBRTC_EVENT_CONNECT_FAILED || event->type == ESP_WEBRTC_EVENT_DISCONNECTED) {
+    } else if (event->type == ESP_WEBRTC_EVENT_CONNECT_FAILED ||
+               event->type == ESP_WEBRTC_EVENT_DISCONNECTED) {
         door_bell_change_state(DOOR_BELL_STATE_NONE);
     }
     return 0;
 }
 
-void send_cmd(char *cmd)
-{
-}
+void send_cmd(char *cmd) {}
 
-static void key_monitor_thread(void *arg)
-{
+static void key_monitor_thread(void *arg) {
     gpio_config_t io_conf;
     memset(&io_conf, 0, sizeof(io_conf));
     io_conf.mode = GPIO_MODE_INPUT;
@@ -270,8 +256,7 @@ static void key_monitor_thread(void *arg)
     media_lib_thread_destroy(NULL);
 }
 
-int start_webrtc(char *url)
-{
+int start_webrtc(char *url) {
     if (network_is_connected() == false) {
         ESP_LOGE(TAG, "Wifi not connected yet");
         return -1;
@@ -288,38 +273,43 @@ int start_webrtc(char *url)
         .agent_recv_timeout = 500,
     };
     esp_webrtc_cfg_t cfg = {
-        .peer_cfg = {
-            .audio_info = {
+        .peer_cfg =
+            {
+                .audio_info =
+                    {
 #ifdef WEBRTC_SUPPORT_OPUS
-                .codec = ESP_PEER_AUDIO_CODEC_OPUS,
-                .sample_rate = 16000,
-                .channel = 2,
+                        .codec = ESP_PEER_AUDIO_CODEC_OPUS,
+                        .sample_rate = 16000,
+                        .channel = 2,
 #else
-                .codec = ESP_PEER_AUDIO_CODEC_G711A,
+                        .codec = ESP_PEER_AUDIO_CODEC_G711A,
 #endif
+                    },
+                .video_info =
+                    {
+                        .codec = ESP_PEER_VIDEO_CODEC_H264,
+                        .width = VIDEO_WIDTH,
+                        .height = VIDEO_HEIGHT,
+                        .fps = VIDEO_FPS,
+                    },
+                .audio_dir = ESP_PEER_MEDIA_DIR_SEND_RECV,
+                .video_dir = ESP_PEER_MEDIA_DIR_SEND_ONLY,
+                .on_custom_data = door_bell_on_cmd,
+                // Add following data channel callback for more accurate control over data channel
+                .on_channel_open = webrtc_data_channel_opened,
+                .on_data = webrtc_on_data,
+                .on_channel_close = webrtc_data_channel_closed,
+                .enable_data_channel = true,
+                .manual_ch_create =
+                    true, // If work as SCTP client disable create data channel automatically
+                .no_auto_reconnect = true, // No auto connect peer when signaling connected
+                .extra_cfg = &peer_cfg,
+                .extra_size = sizeof(peer_cfg),
             },
-            .video_info = {
-                .codec = ESP_PEER_VIDEO_CODEC_H264,
-                .width = VIDEO_WIDTH,
-                .height = VIDEO_HEIGHT,
-                .fps = VIDEO_FPS,
+        .signaling_cfg =
+            {
+                .signal_url = url,
             },
-            .audio_dir = ESP_PEER_MEDIA_DIR_SEND_RECV,
-            .video_dir = ESP_PEER_MEDIA_DIR_SEND_ONLY,
-            .on_custom_data = door_bell_on_cmd,
-            // Add following data channel callback for more accurate control over data channel
-            .on_channel_open = webrtc_data_channel_opened,
-            .on_data = webrtc_on_data,
-            .on_channel_close = webrtc_data_channel_closed,
-            .enable_data_channel = true,
-            .manual_ch_create = true, // If work as SCTP client disable create data channel automatically
-            .no_auto_reconnect = true, // No auto connect peer when signaling connected
-            .extra_cfg = &peer_cfg,
-            .extra_size = sizeof(peer_cfg),
-        },
-        .signaling_cfg = {
-            .signal_url = url,
-        },
         .peer_impl = esp_peer_get_default_impl(),
         .signaling_impl = esp_signaling_get_http_impl(),
     };
@@ -350,15 +340,13 @@ int start_webrtc(char *url)
     return ret;
 }
 
-void query_webrtc(void)
-{
+void query_webrtc(void) {
     if (webrtc) {
         esp_webrtc_query(webrtc);
     }
 }
 
-int stop_webrtc(void)
-{
+int stop_webrtc(void) {
     if (webrtc) {
         monitor_key = false;
         esp_webrtc_handle_t handle = webrtc;

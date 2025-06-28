@@ -7,71 +7,71 @@
    CONDITIONS OF ANY KIND, either express or implied.
 */
 
-#include "codec_init.h"
 #include "codec_board.h"
+#include "codec_init.h"
 #if CONFIG_IDF_TARGET_ESP32P4
 #include "esp_video_init.h"
 #endif
-#include "esp_capture_path_simple.h"
-#include "esp_capture_audio_enc.h"
-#include "esp_capture_video_enc.h"
 #include "av_render.h"
 #include "av_render_default.h"
 #include "common.h"
-#include "esp_log.h"
-#include "settings.h"
-#include "media_lib_os.h"
-#include "esp_timer.h"
-#include "esp_audio_enc_default.h"
-#include "esp_video_enc_default.h"
-#include "esp_video_dec_default.h"
 #include "esp_audio_dec_default.h"
+#include "esp_audio_enc_default.h"
+#include "esp_capture_audio_enc.h"
 #include "esp_capture_defaults.h"
+#include "esp_capture_path_simple.h"
+#include "esp_capture_video_enc.h"
+#include "esp_log.h"
+#include "esp_timer.h"
+#include "esp_video_dec_default.h"
+#include "esp_video_enc_default.h"
+#include "media_lib_os.h"
+#include "settings.h"
 
 #define TAG "MEDIA_SYS"
 
-#define RET_ON_NULL(ptr, v) do {                                \
-    if (ptr == NULL) {                                          \
-        ESP_LOGE(TAG, "Memory allocate fail on %d", __LINE__);  \
-        return v;                                               \
-    }                                                           \
-} while (0)
+#define RET_ON_NULL(ptr, v)                                                                        \
+    do {                                                                                           \
+        if (ptr == NULL) {                                                                         \
+            ESP_LOGE(TAG, "Memory allocate fail on %d", __LINE__);                                 \
+            return v;                                                                              \
+        }                                                                                          \
+    } while (0)
 
 typedef struct {
-    esp_capture_path_handle_t   capture_handle;
-    esp_capture_venc_if_t      *vid_enc;
-    esp_capture_aenc_if_t      *aud_enc;
+    esp_capture_path_handle_t capture_handle;
+    esp_capture_venc_if_t *vid_enc;
+    esp_capture_aenc_if_t *aud_enc;
     esp_capture_video_src_if_t *vid_src;
     esp_capture_audio_src_if_t *aud_src;
-    esp_capture_path_if_t      *path_if;
+    esp_capture_path_if_t *path_if;
 } capture_system_t;
 
 typedef struct {
     audio_render_handle_t audio_render;
     video_render_handle_t video_render;
-    av_render_handle_t    player;
+    av_render_handle_t player;
 } player_system_t;
 
 static capture_system_t capture_sys;
-static player_system_t  player_sys;
+static player_system_t player_sys;
 
-static bool           music_playing  = false;
-static bool           music_stopping = false;
+static bool music_playing = false;
+static bool music_stopping = false;
 static const uint8_t *music_to_play;
-static int            music_size;
-static int            music_duration;
+static int music_size;
+static int music_duration;
 
-static esp_capture_video_src_if_t *create_video_source(void)
-{
+static esp_capture_video_src_if_t *create_video_source(void) {
     camera_cfg_t cam_pin_cfg = {};
     int ret = get_camera_cfg(&cam_pin_cfg);
     if (ret != 0) {
         return NULL;
     }
 #if CONFIG_IDF_TARGET_ESP32P4
-    esp_video_init_csi_config_t csi_config = { 0 };
-    esp_video_init_dvp_config_t dvp_config = { 0 };
-    esp_video_init_config_t cam_config = { 0 };
+    esp_video_init_csi_config_t csi_config = {0};
+    esp_video_init_dvp_config_t dvp_config = {0};
+    esp_video_init_config_t cam_config = {0};
     if (cam_pin_cfg.type == CAMERA_TYPE_MIPI) {
         csi_config.sccb_config.i2c_handle = get_i2c_bus_handle(0);
         csi_config.sccb_config.freq = 100000;
@@ -112,7 +112,7 @@ static esp_capture_video_src_if_t *create_video_source(void)
 
 #if CONFIG_IDF_TARGET_ESP32S3
     if (cam_pin_cfg.type == CAMERA_TYPE_DVP) {
-        esp_capture_video_dvp_src_cfg_t dvp_config = { 0 };
+        esp_capture_video_dvp_src_cfg_t dvp_config = {0};
         dvp_config.buf_count = 2;
         dvp_config.reset_pin = cam_pin_cfg.reset;
         dvp_config.pwr_pin = cam_pin_cfg.pwr;
@@ -135,8 +135,7 @@ static esp_capture_video_src_if_t *create_video_source(void)
     return NULL;
 }
 
-static int build_capture_system(void)
-{
+static int build_capture_system(void) {
     capture_sys.aud_enc = esp_capture_new_audio_encoder();
     RET_ON_NULL(capture_sys.aud_enc, -1);
     capture_sys.vid_enc = esp_capture_new_video_encoder();
@@ -167,8 +166,7 @@ static int build_capture_system(void)
     return 0;
 }
 
-static int build_player_system()
-{
+static int build_player_system() {
     i2s_render_cfg_t i2s_cfg = {
         .fixed_clock = true,
         .play_handle = get_playback_handle(),
@@ -204,8 +202,7 @@ static int build_player_system()
     return 0;
 }
 
-int media_sys_buildup(void)
-{
+int media_sys_buildup(void) {
     // Register for default audio and video codecs
     esp_video_enc_register_default();
     esp_audio_enc_register_default();
@@ -218,27 +215,30 @@ int media_sys_buildup(void)
     return 0;
 }
 
-int media_sys_get_provider(esp_webrtc_media_provider_t *provide)
-{
+int media_sys_get_provider(esp_webrtc_media_provider_t *provide) {
     provide->capture = capture_sys.capture_handle;
     provide->player = player_sys.player;
     return 0;
 }
 
-int test_capture_to_player(void)
-{
+int test_capture_to_player(void) {
     esp_capture_sink_cfg_t sink_cfg = {
-        .audio_info = {
-            .codec = ESP_CAPTURE_CODEC_TYPE_G711A,
-            .sample_rate = 8000,
-            .channel = 1,
-            .bits_per_sample = 16,
-        },
-        .video_info = { .codec = ESP_CAPTURE_CODEC_TYPE_MJPEG, .width = VIDEO_WIDTH, .height = VIDEO_HEIGHT, .fps = 20 },
+        .audio_info =
+            {
+                .codec = ESP_CAPTURE_CODEC_TYPE_G711A,
+                .sample_rate = 8000,
+                .channel = 1,
+                .bits_per_sample = 16,
+            },
+        .video_info = {.codec = ESP_CAPTURE_CODEC_TYPE_MJPEG,
+                       .width = VIDEO_WIDTH,
+                       .height = VIDEO_HEIGHT,
+                       .fps = 20},
     };
     // Create capture
     esp_capture_path_handle_t capture_path = NULL;
-    esp_capture_setup_path(capture_sys.capture_handle, ESP_CAPTURE_PATH_PRIMARY, &sink_cfg, &capture_path);
+    esp_capture_setup_path(capture_sys.capture_handle, ESP_CAPTURE_PATH_PRIMARY, &sink_cfg,
+                           &capture_path);
     esp_capture_enable_path(capture_path, ESP_CAPTURE_RUN_TYPE_ALWAYS);
     // Create player
     av_render_audio_info_t render_aud_info = {
@@ -284,8 +284,7 @@ int test_capture_to_player(void)
     return 0;
 }
 
-static void music_play_thread(void *arg)
-{
+static void music_play_thread(void *arg) {
     // Suppose all music is AAC
     av_render_audio_info_t render_aud_info = {
         .codec = AV_RENDER_AUDIO_CODEC_AAC,
@@ -299,7 +298,8 @@ static void music_play_thread(void *arg)
         if (adts_header[0] != 0xFF) {
             send_size = 0;
         } else {
-            int frame_size = ((adts_header[3] & 0x03) << 11) | (adts_header[4] << 3) | (adts_header[5] >> 5);
+            int frame_size =
+                ((adts_header[3] & 0x03) << 11) | (adts_header[4] << 3) | (adts_header[5] >> 5);
             if (frame_size < send_size) {
                 send_size = frame_size;
             }
@@ -319,7 +319,7 @@ static void music_play_thread(void *arg)
             music_pos = 0;
             // Play one loop only
             if (music_duration == 0) {
-                av_render_fifo_stat_t stat = { 0 };
+                av_render_fifo_stat_t stat = {0};
                 while (!music_stopping) {
                     av_render_get_audio_fifo_level(player_sys.player, &stat);
                     if (stat.data_size > 0) {
@@ -342,8 +342,7 @@ static void music_play_thread(void *arg)
     media_lib_thread_destroy(NULL);
 }
 
-int play_music(const uint8_t *data, int size, int duration)
-{
+int play_music(const uint8_t *data, int size, int duration) {
     if (music_playing) {
         ESP_LOGE(TAG, "Music is playing, stop automatically");
         stop_music();
@@ -353,7 +352,8 @@ int play_music(const uint8_t *data, int size, int duration)
     music_size = size;
     music_duration = duration;
     media_lib_thread_handle_t thread;
-    int ret = media_lib_thread_create_from_scheduler(&thread, "music_player", music_play_thread, NULL);
+    int ret =
+        media_lib_thread_create_from_scheduler(&thread, "music_player", music_play_thread, NULL);
     if (ret != 0) {
         music_playing = false;
         ESP_LOGE(TAG, "Fail to create music_player thread");
@@ -362,8 +362,7 @@ int play_music(const uint8_t *data, int size, int duration)
     return 0;
 }
 
-int stop_music()
-{
+int stop_music() {
     if (music_playing) {
         music_stopping = true;
         while (music_stopping) {

@@ -9,9 +9,9 @@
 
 #pragma once
 
-#include "settings.h"
 #include "media_sys.h"
 #include "network.h"
+#include "settings.h"
 #include "sys_state.h"
 
 #ifdef __cplusplus

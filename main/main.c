@@ -7,74 +7,65 @@
    CONDITIONS OF ANY KIND, either express or implied.
 */
 
-#include <esp_wifi.h>
 #include <esp_event.h>
 #include <esp_log.h>
 #include <esp_system.h>
+#include <esp_wifi.h>
 #include <nvs_flash.h>
 #include <sys/param.h>
+
 #include "argtable3/argtable3.h"
+#include "common.h"
 #include "esp_console.h"
+#include "esp_cpu.h"
+#include "esp_timer.h"
 #include "esp_webrtc.h"
 #include "media_lib_adapter.h"
-#include "media_lib_os.h"
-#include "esp_timer.h"
-#include "webrtc_utils_time.h"
-#include "esp_cpu.h"
-#include "settings.h"
 #include "media_lib_netif.h"
-#include "common.h"
+#include "media_lib_os.h"
+#include "settings.h"
+#include "webrtc_utils_time.h"
 
 static const char *TAG = "Webrtc_Test";
 
-
-#define RUN_ASYNC(name, body)           \
-    void run_async##name(void *arg)     \
-    {                                   \
-        body;                           \
-        media_lib_thread_destroy(NULL); \
-    }                                   \
+#define RUN_ASYNC(name, body)                                                                      \
+    void run_async##name(void *arg) {                                                              \
+        body;                                                                                      \
+        media_lib_thread_destroy(NULL);                                                            \
+    }                                                                                              \
     media_lib_thread_create_from_scheduler(NULL, #name, run_async##name, NULL);
 
-
-static int start_cli(int argc, char **argv)
-{
+static int start_cli(int argc, char **argv) {
     start_webrtc(NULL);
     return 0;
 }
 
-static int stop_cli(int argc, char **argv)
-{
+static int stop_cli(int argc, char **argv) {
     RUN_ASYNC(leave, { stop_webrtc(); });
     return 0;
 }
 
-static int close_data_ch_cli(int argc, char **argv)
-{
+static int close_data_ch_cli(int argc, char **argv) {
     close_data_channel(argc > 1 ? atoi(argv[1]) : 0);
     return 0;
 }
 
-static int cmd_cli(int argc, char **argv)
-{
+static int cmd_cli(int argc, char **argv) {
     send_cmd(argc > 1 ? argv[1] : "ring");
     return 0;
 }
 
-static int assert_cli(int argc, char **argv)
-{
+static int assert_cli(int argc, char **argv) {
     *(int *)0 = 0;
     return 0;
 }
 
-static int sys_cli(int argc, char **argv)
-{
+static int sys_cli(int argc, char **argv) {
     sys_state_show();
     return 0;
 }
 
-static int wifi_cli(int argc, char **argv)
-{
+static int wifi_cli(int argc, char **argv) {
     if (argc < 1) {
         return -1;
     }
@@ -83,14 +74,9 @@ static int wifi_cli(int argc, char **argv)
     return network_connect_wifi(ssid, password);
 }
 
+static int capture_to_player_cli(int argc, char **argv) { return test_capture_to_player(); }
 
-static int capture_to_player_cli(int argc, char **argv)
-{
-    return test_capture_to_player();
-}
-
-static int measure_cli(int argc, char **argv)
-{
+static int measure_cli(int argc, char **argv) {
     void measure_enable(bool enable);
     void show_measure(void);
     measure_enable(true);
@@ -99,8 +85,7 @@ static int measure_cli(int argc, char **argv)
     return 0;
 }
 
-static int init_console()
-{
+static int init_console() {
     esp_console_repl_t *repl = NULL;
     esp_console_repl_config_t repl_config = ESP_CONSOLE_REPL_CONFIG_DEFAULT();
     repl_config.prompt = "esp>";
@@ -115,7 +100,8 @@ static int init_console()
     esp_console_dev_usb_cdc_config_t cdc_config = ESP_CONSOLE_DEV_CDC_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_console_new_repl_usb_cdc(&cdc_config, &repl_config, &repl));
 #elif CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG
-    esp_console_dev_usb_serial_jtag_config_t usbjtag_config = ESP_CONSOLE_DEV_USB_SERIAL_JTAG_CONFIG_DEFAULT();
+    esp_console_dev_usb_serial_jtag_config_t usbjtag_config =
+        ESP_CONSOLE_DEV_USB_SERIAL_JTAG_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_console_new_repl_usb_serial_jtag(&usbjtag_config, &repl_config, &repl));
 #endif
 
@@ -173,8 +159,7 @@ static int init_console()
     return 0;
 }
 
-static void thread_scheduler(const char *thread_name, media_lib_thread_cfg_t *thread_cfg)
-{
+static void thread_scheduler(const char *thread_name, media_lib_thread_cfg_t *thread_cfg) {
     if (strcmp(thread_name, "pc_task") == 0) {
         thread_cfg->stack_size = 25 * 1024;
         thread_cfg->priority = 18;
@@ -197,15 +182,13 @@ static void thread_scheduler(const char *thread_name, media_lib_thread_cfg_t *th
 #endif
 }
 
-static char *get_network_ip(void)
-{
+static char *get_network_ip(void) {
     media_lib_ipv4_info_t ip_info;
     media_lib_netif_get_ipv4_info(MEDIA_LIB_NET_TYPE_STA, &ip_info);
     return media_lib_ipv4_ntoa(&ip_info.ip);
 }
 
-static int network_event_handler(bool connected)
-{
+static int network_event_handler(bool connected) {
     if (connected) {
         // Enter into Room directly
         RUN_ASYNC(start, {
@@ -218,8 +201,7 @@ static int network_event_handler(bool connected)
     return 0;
 }
 
-void app_main(void)
-{
+void app_main(void) {
     esp_log_level_set("*", ESP_LOG_INFO);
     media_lib_add_default_adapter();
     media_lib_thread_set_schedule_cb(thread_scheduler);
