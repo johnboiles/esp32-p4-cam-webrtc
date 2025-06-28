@@ -37,18 +37,6 @@ typedef enum {
     DOOR_BELL_STATE_CONNECTED,
 } door_bell_state_t;
 
-typedef enum {
-    DOOR_BELL_TONE_RING,
-    DOOR_BELL_TONE_OPEN_DOOR,
-    DOOR_BELL_TONE_JOIN_SUCCESS,
-} door_bell_tone_type_t;
-
-typedef struct {
-    const uint8_t *start;
-    const uint8_t *end;
-    int            duration;
-} door_bell_tone_data_t;
-
 typedef struct {
     esp_peer_data_channel_info_t info;
     int send_count;
@@ -61,31 +49,6 @@ static door_bell_state_t   door_bell_state;
 static bool                monitor_key;
 static user_data_ch_t      user_ch[2];
 static bool data_running = false;
-
-extern const uint8_t ring_music_start[] asm("_binary_ring_aac_start");
-extern const uint8_t ring_music_end[] asm("_binary_ring_aac_end");
-extern const uint8_t open_music_start[] asm("_binary_open_aac_start");
-extern const uint8_t open_music_end[] asm("_binary_open_aac_end");
-extern const uint8_t join_music_start[] asm("_binary_join_aac_start");
-extern const uint8_t join_music_end[] asm("_binary_join_aac_end");
-
-static int play_tone(door_bell_tone_type_t type)
-{
-    door_bell_tone_data_t tone_data[] = {
-        { ring_music_start, ring_music_end, 4000 },
-        { open_music_start, open_music_end, 0 },
-        { join_music_start, join_music_end, 0 },
-    };
-    if (type >= sizeof(tone_data) / sizeof(tone_data[0])) {
-        return 0;
-    }
-    return play_music(tone_data[type].start, (int)(tone_data[type].end - tone_data[type].start), tone_data[type].duration);
-}
-
-int play_tone_int(int t)
-{
-    return play_tone((door_bell_tone_type_t)t);
-}
 
 static void door_bell_change_state(door_bell_state_t state)
 {
@@ -106,14 +69,7 @@ static int door_bell_on_cmd(esp_webrtc_custom_data_via_t via, uint8_t *data, int
     }
     ESP_LOGI(TAG, "Receive command %.*s", size, (char *)data);
     const char *cmd = (const char *)data;
-    if (SAME_STR(cmd, DOOR_BELL_OPEN_DOOR_CMD)) {
-        // Reply with door OPENED
-        SEND_CMD(webrtc, DOOR_BELL_DOOR_OPENED_CMD);
-        // Only play tome when connection not build up
-        if (door_bell_state < DOOR_BELL_STATE_CONNECTING) {
-            play_tone(DOOR_BELL_TONE_OPEN_DOOR);
-        }
-    } else if (SAME_STR(cmd, DOOR_BELL_CALL_ACCEPTED_CMD)) {
+    if (SAME_STR(cmd, DOOR_BELL_CALL_ACCEPTED_CMD)) {
         door_bell_change_state(DOOR_BELL_STATE_CONNECTING);
         esp_webrtc_enable_peer_connection(webrtc, true);
     } else if (SAME_STR(cmd, DOOR_BELL_CALL_DENIED_CMD)) {
@@ -285,14 +241,6 @@ static int webrtc_event_handler(esp_webrtc_event_t *event, void *ctx)
 
 void send_cmd(char *cmd)
 {
-    if (SAME_STR(cmd, "ring")) {
-        SEND_CMD(webrtc, DOOR_BELL_RING_CMD);
-        ESP_LOGI(TAG, "Ring button on state %d", door_bell_state);
-        if (door_bell_state < DOOR_BELL_STATE_CONNECTING) {
-            door_bell_state = DOOR_BELL_STATE_RINGING;
-            play_tone(DOOR_BELL_TONE_RING);
-        }
-    }
 }
 
 static void key_monitor_thread(void *arg)
@@ -398,8 +346,6 @@ int start_webrtc(char *url)
     ret = esp_webrtc_start(webrtc);
     if (ret != 0) {
         ESP_LOGE(TAG, "Fail to start webrtc");
-    } else {
-        play_tone(DOOR_BELL_TONE_JOIN_SUCCESS);
     }
     return ret;
 }

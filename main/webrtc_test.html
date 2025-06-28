@@ -222,18 +222,12 @@
 
     <div id="status" class="disconnected">Disconnected</div>
 
-    <!-- Hidden audio element for ring sound -->
-    <audio id="ringSound" preload="auto" loop>
-        <source src="/webrtc/ring.aac" type="audio/aac">
-    </audio>
-
     <script>
         let localStream = null;
         let peerConnection = null;
         let signalingUrl = '/webrtc/signal';
         let signalingPostUrl = '/webrtc/signal/post';
         let eventSource = null;
-        let ringSound = null;
         let isRinging = false;
         let pendingCandidates = [];
         let dataChannels = [];
@@ -244,44 +238,6 @@
         const hangupButton = document.getElementById('hangupButton');
         const openDoorButton = document.getElementById('openDoorButton');
         const statusDiv = document.getElementById('status');
-
-        // Initialize ring sound
-        function initRingSound() {
-            console.log('Start to load ring');
-            ringSound = document.getElementById('ringSound');
-            ringSound.load();
-            ringSound.addEventListener('error', (e) => {
-                console.error('Error loading ring sound:', e);
-            });
-            ringSound.addEventListener('canplaythrough', () => {
-                console.log('Ring sound loaded and ready to play');
-            });
-        }
-
-        // Play ring sound
-        function playRingSound() {
-            if (ringSound) {
-                isRinging = true;
-                ringSound.currentTime = 0;
-                ringSound.play().then(() => {
-                    console.log('Ring sound started playing');
-                }).catch(error => {
-                    console.error('Error playing ring sound:', error);
-                    setTimeout(() => {
-                        ringSound.play().catch(e => console.error('Retry failed:', e));
-                    }, 1000);
-                });
-            }
-        }
-
-        // Stop ring sound
-        function stopRingSound() {
-            if (ringSound) {
-                isRinging = false;
-                ringSound.pause();
-                ringSound.currentTime = 0;
-            }
-        }
 
         // Call button click handler
         callButton.onclick = async () => {
@@ -294,7 +250,6 @@
                     localVideo.srcObject = localStream;
                 }
                 sendCustomCommand('ACCEPT_CALL');
-                stopRingSound();
                 callButton.disabled = true;
                 callButton.classList.remove('ringing');
                 hangupButton.disabled = false;
@@ -336,7 +291,6 @@
             hangupButton.disabled = true;
             statusDiv.textContent = 'Call ended';
             statusDiv.className = 'disconnected';
-            stopRingSound();
             pendingCandidates = []; // Clear pending candidates
         }
 
@@ -440,7 +394,6 @@
                     break;
                 case 'RING':
                     console.log('Doorbell ringing...');
-                    playRingSound();
                     callButton.disabled = false;
                     callButton.classList.add('ringing');
                     hangupButton.disabled = false;
@@ -451,7 +404,6 @@
                     break;
                 case 'ACCEPT_CALL':
                     console.log('Call accepted...');
-                    stopRingSound();
                     callButton.disabled = true;
                     callButton.classList.remove('ringing');
                     hangupButton.disabled = false;
@@ -681,7 +633,6 @@
 
         // Initialize when page loads
         window.onload = function() {
-            initRingSound();
             startSignaling();
             // Set initial button states
             callButton.disabled = false;

@@ -251,18 +251,6 @@ static esp_err_t webrtc_test_get_handler(httpd_req_t *req)
     return ESP_OK;
 }
 
-// Handler for GET /webrtc/ring.aac
-static esp_err_t webrtc_ring_get_handler(httpd_req_t *req)
-{
-    extern const unsigned char ring_aac_start[] asm("_binary_ring_aac_start");
-    extern const unsigned char ring_aac_end[] asm("_binary_ring_aac_end");
-    const size_t ring_aac_size = (ring_aac_end - ring_aac_start);
-
-    httpd_resp_set_type(req, "audio/aac");
-    httpd_resp_send(req, (const char *)ring_aac_start, ring_aac_size);
-    return ESP_OK;
-}
-
 // Initialize HTTP server
 static esp_err_t init_http_server(void)
 {
@@ -314,14 +302,6 @@ static esp_err_t init_http_server(void)
         .user_ctx = NULL
     };
     httpd_register_uri_handler(server, &webrtc_test);
-
-    httpd_uri_t webrtc_ring = {
-        .uri = "/webrtc/ring.aac",
-        .method = HTTP_GET,
-        .handler = webrtc_ring_get_handler,
-        .user_ctx = NULL
-    };
-    httpd_register_uri_handler(server, &webrtc_ring);
 
     return ESP_OK;
 }
