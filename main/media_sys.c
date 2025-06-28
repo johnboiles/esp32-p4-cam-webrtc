@@ -56,12 +56,6 @@ typedef struct {
 static capture_system_t capture_sys;
 static player_system_t player_sys;
 
-static bool music_playing = false;
-static bool music_stopping = false;
-static const uint8_t *music_to_play;
-static int music_size;
-static int music_duration;
-
 static esp_capture_video_src_if_t *create_video_source(void) {
     camera_cfg_t cam_pin_cfg = {};
     int ret = get_camera_cfg(&cam_pin_cfg);
@@ -281,93 +275,5 @@ int test_capture_to_player(void) {
     }
     esp_capture_stop(capture_sys.capture_handle);
     av_render_reset(player_sys.player);
-    return 0;
-}
-
-static void music_play_thread(void *arg) {
-    // Suppose all music is AAC
-    av_render_audio_info_t render_aud_info = {
-        .codec = AV_RENDER_AUDIO_CODEC_AAC,
-    };
-    av_render_add_audio_stream(player_sys.player, &render_aud_info);
-    int music_pos = 0;
-    while (!music_stopping && music_duration >= 0) {
-        uint32_t start_time = esp_timer_get_time() / 1000;
-        int send_size = music_size - music_pos;
-        const uint8_t *adts_header = music_to_play + music_pos;
-        if (adts_header[0] != 0xFF) {
-            send_size = 0;
-        } else {
-            int frame_size =
-                ((adts_header[3] & 0x03) << 11) | (adts_header[4] << 3) | (adts_header[5] >> 5);
-            if (frame_size < send_size) {
-                send_size = frame_size;
-            }
-        }
-        if (send_size) {
-            av_render_audio_data_t audio_data = {
-                .data = (uint8_t *)adts_header,
-                .size = send_size,
-            };
-            int ret = av_render_add_audio_data(player_sys.player, &audio_data);
-            if (ret != 0) {
-                break;
-            }
-            music_pos += send_size;
-        }
-        if (music_pos >= music_size || send_size == 0) {
-            music_pos = 0;
-            // Play one loop only
-            if (music_duration == 0) {
-                av_render_fifo_stat_t stat = {0};
-                while (!music_stopping) {
-                    av_render_get_audio_fifo_level(player_sys.player, &stat);
-                    if (stat.data_size > 0) {
-                        media_lib_thread_sleep(50);
-                        continue;
-                    }
-                    break;
-                }
-                break;
-            }
-        }
-        uint32_t end_time = esp_timer_get_time() / 1000;
-        if (music_duration) {
-            music_duration -= end_time - start_time;
-        }
-    }
-    av_render_reset(player_sys.player);
-    music_stopping = false;
-    music_playing = false;
-    media_lib_thread_destroy(NULL);
-}
-
-int play_music(const uint8_t *data, int size, int duration) {
-    if (music_playing) {
-        ESP_LOGE(TAG, "Music is playing, stop automatically");
-        stop_music();
-    }
-    music_playing = true;
-    music_to_play = data;
-    music_size = size;
-    music_duration = duration;
-    media_lib_thread_handle_t thread;
-    int ret =
-        media_lib_thread_create_from_scheduler(&thread, "music_player", music_play_thread, NULL);
-    if (ret != 0) {
-        music_playing = false;
-        ESP_LOGE(TAG, "Fail to create music_player thread");
-        return ret;
-    }
-    return 0;
-}
-
-int stop_music() {
-    if (music_playing) {
-        music_stopping = true;
-        while (music_stopping) {
-            media_lib_thread_sleep(20);
-        }
-    }
     return 0;
 }

@@ -51,12 +51,7 @@ static bool monitor_key;
 static user_data_ch_t user_ch[2];
 static bool data_running = false;
 
-static void door_bell_change_state(door_bell_state_t state) {
-    door_bell_state = state;
-    if (state == DOOR_BELL_STATE_CONNECTING || state == DOOR_BELL_STATE_NONE) {
-        stop_music();
-    }
-}
+static void door_bell_change_state(door_bell_state_t state) { door_bell_state = state; }
 
 static int door_bell_on_cmd(esp_webrtc_custom_data_via_t via, uint8_t *data, int size, void *ctx) {
     // Only handle signaling message
