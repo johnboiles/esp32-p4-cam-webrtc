@@ -27,7 +27,15 @@ extern "C" {
 /**
  * @brief  Video resolution settings
  */
-#if CONFIG_IDF_TARGET_ESP32P4
+#if CONFIG_CAMERA_OV5647
+#if CONFIG_CAMERA_OV5647_MIPI_RAW10_1920x1080_30FPS
+#define VIDEO_WIDTH 1920
+#define VIDEO_HEIGHT 1080
+#define VIDEO_FPS 30
+#else
+#error "Add defines for other camera resolutions here"
+#endif
+#elif CONFIG_IDF_TARGET_ESP32P4
 #define VIDEO_WIDTH 1920
 #define VIDEO_HEIGHT 1080
 #define VIDEO_FPS 25
